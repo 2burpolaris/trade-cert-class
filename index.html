@@ -311,6 +311,7 @@
             </label>
             <p class="agree-detail">수집 항목: 이름, 연락처, 관심 과정 · 목적: 수강 상담 연락 · 보관: 상담이 끝나면 지체 없이 파기</p>
           </div>
+          <input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
           <button class="btn" type="submit">수강 상담 신청</button>
           <p class="msg" id="msg" role="status"></p>
         </form>
@@ -331,18 +332,19 @@
       msg.className = 'msg';
 
       const data = {
-        name: form.name.value.trim(),
-        phone: form.phone.value.trim(),
-        course: form.course.value,
-        agree: form.agree.checked
+        name: form.elements.name.value.trim(),
+        contact: form.elements.phone.value.trim(),
+        course: form.elements.course.value,
+        consent: form.elements.agree.checked,
+        website: form.elements.website.value
       };
 
-      if (!data.name || !data.phone || !data.course) {
+      if (!data.name || !data.contact || !data.course) {
         msg.textContent = '이름, 연락처, 관심 과정을 모두 적어 주세요.';
         msg.classList.add('err');
         return;
       }
-      if (!data.agree) {
+      if (!data.consent) {
         msg.textContent = '개인정보 수집·이용에 동의해 주세요.';
         msg.classList.add('err');
         return;
@@ -358,12 +360,13 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data)
         });
-        if (!res.ok) throw new Error();
+        const out = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(out.error || '');
         form.reset();
-        msg.textContent = '상담 신청이 접수됐어요. 곧 연락드릴게요.';
+        msg.textContent = '상담 신청이 접수됐어요. 확인 후 연락드릴게요.';
         msg.classList.add('ok');
-      } catch {
-        msg.textContent = '지금은 신청 접수를 준비 중이에요. 잠시 후 다시 시도해 주세요.';
+      } catch (err) {
+        msg.textContent = (!(err instanceof TypeError) && err.message) || '보내지 못했어요. 잠시 후 다시 시도해 주세요.';
         msg.classList.add('err');
       } finally {
         button.disabled = false;

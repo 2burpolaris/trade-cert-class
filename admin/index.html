@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>상담 신청 관리</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+  <style>
+    :root {
+      --ink: #0f1f33;
+      --ink-soft: #4a5a6e;
+      --line: #e3e8ef;
+      --bg-soft: #f5f7fa;
+      --accent: #0b5cad;
+      --accent-tint: #e8f1fb;
+    }
+    [hidden] { display: none !important; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Pretendard", -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+      font-size: 16px;
+      color: var(--ink);
+      background: var(--bg-soft);
+      line-height: 1.5;
+      word-break: keep-all;
+    }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 20px 16px 48px; }
+    h1 { font-size: 1.3rem; margin: 8px 0 20px; }
+
+    .login {
+      background: #fff; border: 1px solid var(--line); border-radius: 14px;
+      padding: 24px; max-width: 400px; margin: 40px auto 0;
+    }
+    label { display: block; font-weight: 600; margin-bottom: 8px; }
+    input[type=password] {
+      width: 100%; font: inherit; padding: 13px 14px;
+      border: 1px solid #cfd7e2; border-radius: 10px;
+    }
+    button {
+      font: inherit; font-weight: 600; cursor: pointer;
+      border-radius: 10px; min-height: 46px; padding: 10px 16px;
+    }
+    .primary { width: 100%; margin-top: 14px; background: var(--accent); color: #fff; border: 0; }
+    .err { color: #b42318; margin: 12px 0 0; min-height: 1.4em; }
+
+    .top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .ghost { background: #fff; border: 1px solid var(--line); color: var(--ink-soft); min-height: 40px; }
+    .count {
+      background: #fff; border: 1px solid var(--line); border-radius: 14px;
+      padding: 20px; margin-bottom: 18px;
+    }
+    .count strong { display: block; font-size: 2.6rem; line-height: 1.1; color: var(--accent); }
+    .count span { color: var(--ink-soft); }
+
+    .card {
+      background: #fff; border: 1px solid var(--line); border-radius: 14px;
+      padding: 18px; margin-bottom: 12px;
+    }
+    .card .date { font-size: .9rem; color: var(--ink-soft); }
+    .card .name { font-size: 1.15rem; font-weight: 700; margin: 4px 0; }
+    .card .course {
+      display: inline-block; font-size: .9rem; font-weight: 600;
+      color: var(--accent); background: var(--accent-tint);
+      border-radius: 999px; padding: 3px 10px; margin-bottom: 8px;
+    }
+    .contact {
+      display: block; width: 100%; text-align: left;
+      background: var(--bg-soft); border: 1px solid var(--line); color: var(--ink);
+      font-weight: 500; margin: 6px 0 12px; user-select: all;
+    }
+    .contact small { color: var(--ink-soft); font-weight: 400; margin-left: 6px; }
+    .status { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .status button { background: #fff; border: 1px solid #cfd7e2; color: var(--ink-soft); padding: 8px 4px; }
+    .status button.on { background: var(--ink); border-color: var(--ink); color: #fff; }
+    .empty { text-align: center; color: var(--ink-soft); padding: 40px 0; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <form class="login" id="login">
+      <h1>상담 신청 관리</h1>
+      <label for="pw">관리자 비밀번호</label>
+      <input type="password" id="pw" autocomplete="current-password" required>
+      <button class="primary" type="submit">들어가기</button>
+      <p class="err" id="loginErr" role="alert"></p>
+    </form>
+
+    <div id="board" hidden>
+      <div class="top">
+        <h1>상담 신청 관리</h1>
+        <button class="ghost" id="logout" type="button">나가기</button>
+      </div>
+      <div class="count"><strong id="newCount">0</strong><span>새 문의</span></div>
+      <p class="err" id="boardErr" role="alert"></p>
+      <div id="list"></div>
+    </div>
+  </div>
+
+  <script>
+    const KEY = 'adminPw';
+    const STATUSES = ['새 문의', '연락함', '완료'];
+    const $ = (id) => document.getElementById(id);
+
+    function getPw() { try { return sessionStorage.getItem(KEY) || ''; } catch { return ''; } }
+    function setPw(v) { try { v ? sessionStorage.setItem(KEY, v) : sessionStorage.removeItem(KEY); } catch {} }
+
+    async function api(method, body) {
+      const res = await fetch('/api/admin', {
+        method,
+        headers: { 'x-admin-password': getPw(), 'Content-Type': 'application/json' },
+        body: body ? JSON.stringify(body) : undefined
+      });
+      const out = await res.json().catch(() => ({}));
+      return { status: res.status, ok: res.ok, out };
+    }
+
+    function showLogin(message) {
+      setPw('');
+      $('board').hidden = true;
+      $('login').hidden = false;
+      $('loginErr').textContent = message || '';
+      $('pw').value = '';
+      $('pw').focus();
+    }
+
+    function fmt(iso) {
+      const d = new Date(iso);
+      return d.toLocaleString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    }
+
+    function render(rows) {
+      $('newCount').textContent = rows.filter((r) => r.status === '새 문의').length;
+      const list = $('list');
+      list.textContent = '';
+      if (!rows.length) {
+        list.innerHTML = '<p class="empty">아직 들어온 상담 신청이 없어요.</p>';
+        return;
+      }
+      for (const r of rows) {
+        const card = document.createElement('div');
+        card.className = 'card';
+
+        const date = document.createElement('div');
+        date.className = 'date';
+        date.textContent = fmt(r.created_at);
+
+        const name = document.createElement('div');
+        name.className = 'name';
+        name.textContent = r.name;
+
+        card.append(date, name);
+
+        if (r.course) {
+          const course = document.createElement('span');
+          course.className = 'course';
+          course.textContent = r.course;
+          card.append(course);
+        }
+
+        const contact = document.createElement('button');
+        contact.type = 'button';
+        contact.className = 'contact';
+        contact.textContent = r.contact;
+        const hint = document.createElement('small');
+        hint.textContent = '눌러서 복사';
+        contact.append(hint);
+        contact.addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(r.contact);
+            hint.textContent = '복사했어요';
+          } catch {
+            const range = document.createRange();
+            range.selectNodeContents(contact.firstChild);
+            const sel = getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+          }
+        });
+        card.append(contact);
+
+        const status = document.createElement('div');
+        status.className = 'status';
+        for (const s of STATUSES) {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.textContent = s;
+          if (r.status === s) b.className = 'on';
+          b.addEventListener('click', () => changeStatus(r.id, s));
+          status.append(b);
+        }
+        card.append(status);
+        list.append(card);
+      }
+    }
+
+    async function load() {
+      const { status, ok, out } = await api('GET');
+      if (status === 401) return showLogin('비밀번호가 맞지 않아요.');
+      if (!ok) {
+        $('login').hidden = true;
+        $('board').hidden = false;
+        $('boardErr').textContent = out.error || '불러오지 못했어요.';
+        return;
+      }
+      $('login').hidden = true;
+      $('board').hidden = false;
+      $('boardErr').textContent = '';
+      render(out.rows || []);
+    }
+
+    async function changeStatus(id, s) {
+      const { status, ok, out } = await api('PATCH', { id, status: s });
+      if (status === 401) return showLogin('비밀번호가 맞지 않아요.');
+      if (!ok) { $('boardErr').textContent = out.error || '바꾸지 못했어요.'; return; }
+      load();
+    }
+
+    $('login').addEventListener('submit', (e) => {
+      e.preventDefault();
+      setPw($('pw').value);
+      load();
+    });
+    $('logout').addEventListener('click', () => showLogin(''));
+
+    if (getPw()) load(); else $('pw').focus();
+  </script>
+</body>
+</html>
